@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SelectStoreAR.Application/SelectStoreAR.Application.csproj" />
+    <Project Path="src/SelectStoreAR.Domain/SelectStoreAR.Domain.csproj" />
+    <Project Path="src/SelectStoreAR.Infrastructure/SelectStoreAR.Infrastructure.csproj" />
+    <Project Path="src/SelectStoreAR.WebAPI/SelectStoreAR.WebAPI.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SelectStoreAR.Application.Tests/SelectStoreAR.Application.Tests.csproj" />
+    <Project Path="tests/SelectStoreAR.Domain.Tests/SelectStoreAR.Domain.Tests.csproj" />
+  </Folder>
+</Solution>

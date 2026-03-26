@@ -1,0 +1,21 @@
+selectstorear.com.ar {
+    # API Backend
+    handle /api/* {
+        reverse_proxy api:8080
+    }
+
+    # Grafana
+    handle /grafana/* {
+        reverse_proxy grafana:3000
+    }
+
+    # Analytics (Umami)
+    handle /analytics/* {
+        reverse_proxy umami:3000
+    }
+
+    # Frontend (Angular SSR) — proxy al contenedor web cuando exista
+    handle {
+        reverse_proxy web:4000
+    }
+}

@@ -1,0 +1,30 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+
+    <!-- Tratar todos los warnings como errores -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+
+    <!-- Habilitar todos los .NET analyzers -->
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest-all</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- StyleCop — convenciones de estilo (latest beta es la version activa) -->
+    <PackageReference Include="StyleCop.Analyzers" Version="1.2.0-beta.556">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>analyzers</IncludeAssets>
+    </PackageReference>
+
+    <!-- Roslynator — 500+ analyzers adicionales -->
+    <PackageReference Include="Roslynator.Analyzers" Version="4.*">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>analyzers</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+</Project>

@@ -1,0 +1,34 @@
+## .NET Core / Visual Studio
+*.user
+*.suo
+.vs/
+bin/
+obj/
+*.dll
+*.pdb
+*.exe
+*.nupkg
+
+## Test results
+TestResults/
+coverage/
+*.trx
+
+## Environment / secrets
+.env
+.env.*
+appsettings.*.json
+!appsettings.json
+!appsettings.Development.json
+
+## Rider
+.idea/
+
+## VS Code
+.vscode/
+
+## Docker volumes (local)
+postgres-data/
+redis-data/
+loki-data/
+grafana-data/

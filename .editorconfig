@@ -1,0 +1,102 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = crlf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+
+[*.cs]
+indent_size = 4
+
+# Naming conventions
+dotnet_naming_rule.public_members_must_be_pascal_case.severity = error
+dotnet_naming_rule.public_members_must_be_pascal_case.symbols = public_symbols
+dotnet_naming_rule.public_members_must_be_pascal_case.style = pascal_case_style
+
+dotnet_naming_symbols.public_symbols.applicable_kinds = property,method,field,event
+dotnet_naming_symbols.public_symbols.applicable_accessibilities = public,internal
+
+dotnet_naming_style.pascal_case_style.capitalization = pascal_case
+
+# Private fields con underscore prefix
+dotnet_naming_rule.private_fields_underscore.severity = error
+dotnet_naming_rule.private_fields_underscore.symbols = private_fields
+dotnet_naming_rule.private_fields_underscore.style = underscore_prefix_style
+
+dotnet_naming_symbols.private_fields.applicable_kinds = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private
+
+dotnet_naming_style.underscore_prefix_style.capitalization = camel_case
+dotnet_naming_style.underscore_prefix_style.required_prefix = _
+
+# Code style
+csharp_style_var_for_built_in_types = false:error
+csharp_style_var_when_type_is_apparent = true:suggestion
+csharp_style_expression_bodied_methods = when_on_single_line:suggestion
+csharp_prefer_braces = true:error
+csharp_style_prefer_switch_expression = true:suggestion
+csharp_style_prefer_pattern_matching = true:suggestion
+
+# Nullable
+dotnet_diagnostic.CS8600.severity = error
+dotnet_diagnostic.CS8601.severity = error
+dotnet_diagnostic.CS8602.severity = error
+dotnet_diagnostic.CS8603.severity = error
+dotnet_diagnostic.CS8604.severity = error
+
+# --- StyleCop: disable rules that conflict with project style ---
+dotnet_diagnostic.SA1101.severity = none   # Prefix local calls with this.
+dotnet_diagnostic.SA1633.severity = none   # File should have header
+dotnet_diagnostic.SA1200.severity = none   # Using directives inside namespace
+dotnet_diagnostic.SA1210.severity = none   # Using directives order
+dotnet_diagnostic.SA1208.severity = none   # System using directives first
+dotnet_diagnostic.SA1309.severity = none   # Field names must not begin with underscore (we use _ prefix)
+dotnet_diagnostic.SX1309.severity = warning # Field names must begin with underscore
+dotnet_diagnostic.SA0001.severity = none   # XML comment analysis disabled (no XML docs required)
+
+# --- CA: disable rules accepted by project design decision ---
+dotnet_diagnostic.CA1062.severity = none   # Validate arguments (nullable handles this)
+dotnet_diagnostic.CA1014.severity = none   # Mark assemblies with CLSCompliantAttribute
+dotnet_diagnostic.CA1054.severity = none   # URL parameters should use Uri type (string URLs fine in domain)
+dotnet_diagnostic.CA1055.severity = none   # URI return values should not be strings
+dotnet_diagnostic.CA1056.severity = none   # URI properties should not be strings
+dotnet_diagnostic.CA1002.severity = none   # Change List<T> to Collection<T> (List<T> fine in factory methods)
+dotnet_diagnostic.CA5394.severity = none   # Random is insecure (order number suffix is not security-critical)
+dotnet_diagnostic.CA1308.severity = none   # ToLowerInvariant intentional for slug/email normalization
+dotnet_diagnostic.CA1822.severity = none   # Member can be static (instance methods allow DI/inheritance)
+dotnet_diagnostic.CA1724.severity = none   # Type name conflicts with namespace (Markup is our domain term)
+dotnet_diagnostic.CA1305.severity = suggestion  # Use IFormatProvider (only suggestion, not error)
+dotnet_diagnostic.CA1040.severity = none   # Empty interface allowed (IDomainEvent marker)
+dotnet_diagnostic.SA1201.severity = none   # Member ordering (private constructor before properties is DDD pattern)
+dotnet_diagnostic.SA1204.severity = none   # Static members before non-static (private static fields go with private ctor)
+dotnet_diagnostic.SA1515.severity = none   # Single-line comment blank line (inline comments allowed)
+dotnet_diagnostic.SA1402.severity = none   # Multiple types per file (related records allowed)
+dotnet_diagnostic.SA1127.severity = none   # Generic type constraints on own line (inline OK for short constraints)
+dotnet_diagnostic.CA1873.severity = none   # LoggerMessage performance (acceptable in behaviors)
+dotnet_diagnostic.CA1848.severity = none   # LoggerMessage delegates (standard LogInformation OK)
+dotnet_diagnostic.SA1202.severity = none   # Member ordering public/protected (override ordering)
+dotnet_diagnostic.CA1862.severity = none   # Use string.Equals for comparison (EF Core ILike OK)
+dotnet_diagnostic.CA1515.severity = none   # Types should be internal (WebAPI extension methods need public)
+dotnet_diagnostic.CA2007.severity = none   # ConfigureAwait (not needed in ASP.NET Core request handlers)
+dotnet_diagnostic.CA1031.severity = none   # Catch generic exception (health check intentionally catches all)
+dotnet_diagnostic.SA1516.severity = none   # Elements separated by blank line (record groups don't need it)
+dotnet_diagnostic.CA1861.severity = none   # Prefer static readonly over constant array (minor perf optimization)
+dotnet_diagnostic.SA1649.severity = none   # File name must match type name (DTOs with multiple records per file allowed)
+
+[*.{json,xml,yml,yaml}]
+indent_size = 2
+
+# EF Core Migrations — auto-generated, skip all analyzers
+[**/Migrations/*.cs]
+generated_code = true
+dotnet_analyzer_diagnostic.severity = none
+
+# Test projects — allow underscore naming convention (MethodName_Scenario_Expected)
+[tests/**/*.cs]
+dotnet_diagnostic.CA1707.severity = none
+dotnet_diagnostic.SA1649.severity = none
+
+[*.md]
+trim_trailing_whitespace = false
