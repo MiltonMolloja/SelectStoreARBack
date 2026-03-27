@@ -84,6 +84,12 @@ dotnet_diagnostic.CA1031.severity = none   # Catch generic exception (health che
 dotnet_diagnostic.SA1516.severity = none   # Elements separated by blank line (record groups don't need it)
 dotnet_diagnostic.CA1861.severity = none   # Prefer static readonly over constant array (minor perf optimization)
 dotnet_diagnostic.SA1649.severity = none   # File name must match type name (DTOs with multiple records per file allowed)
+dotnet_diagnostic.CA1034.severity = none   # Do not nest types (nested records in parsers OK)
+dotnet_diagnostic.SA1316.severity = none   # Tuple element casing (lowercase tuple names OK)
+dotnet_diagnostic.CA1865.severity = none   # Use char overload (emoji strings not char)
+dotnet_diagnostic.CA1307.severity = none   # StringComparison on Contains (ToLowerInvariant already handles)
+dotnet_diagnostic.SA1117.severity = none   # Parameters same line (multi-param calls OK on mixed lines)
+dotnet_diagnostic.CA1847.severity = none   # Use char overload for Contains (emoji/string consistency)
 
 [*.{json,xml,yml,yaml}]
 indent_size = 2

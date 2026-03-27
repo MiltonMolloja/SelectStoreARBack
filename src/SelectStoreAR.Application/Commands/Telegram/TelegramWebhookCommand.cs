@@ -15,8 +15,10 @@ public sealed record TelegramWebhookResult(
 // Telegram API models
 public sealed record TelegramUpdate(
     long UpdateId,
-    TelegramMessage? ChannelPost,
-    TelegramMessage? EditedChannelPost);
+    TelegramMessage? ChannelPost,        // Mensaje de canal
+    TelegramMessage? EditedChannelPost,  // Edición de canal
+    TelegramMessage? Message,            // Mensaje de grupo/privado
+    TelegramMessage? EditedMessage);     // Edición de grupo/privado
 
 public sealed record TelegramMessage(
     long MessageId,
