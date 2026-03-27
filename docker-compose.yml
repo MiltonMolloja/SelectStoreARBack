@@ -80,6 +80,28 @@ services:
     networks:
       - internal
 
+  # ─── Telegram Reader (lee grupo con tu cuenta personal) ───────────────────
+  telegram-reader:
+    build:
+      context: ./tools/telegram-reader
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - TELEGRAM_API_ID=${TELEGRAM_API_ID}
+      - TELEGRAM_API_HASH=${TELEGRAM_API_HASH}
+      - TELEGRAM_GROUP=${TELEGRAM_GROUP:-NetShop ARG}
+      - API_BASE_URL=http://api:8080
+      - API_ADMIN_TOKEN=${API_ADMIN_TOKEN}
+      - CHECK_INTERVAL_HOURS=4
+      - LOOKBACK_HOURS=24
+    volumes:
+      - telegram_session:/app/session
+    depends_on:
+      - api
+    mem_limit: 128m
+    networks:
+      - internal
+
   # ─── Observabilidad (24/7) ────────────────────────────────────────────────
   loki:
     image: grafana/loki:3.4
@@ -192,6 +214,7 @@ volumes:
   sonar_extensions:
   sonar_logs:
   sonar_db_data:
+  telegram_session:
 
 networks:
   internal:

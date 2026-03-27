@@ -17,9 +17,18 @@ coverage/
 ## Environment / secrets
 .env
 .env.*
+!.env.example
 appsettings.*.json
 !appsettings.json
 !appsettings.Development.json
+
+## Telegram session (contains auth token — never commit)
+*.session
+*.session-journal
+
+## Python
+__pycache__/
+*.pyc
 
 ## Rider
 .idea/
