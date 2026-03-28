@@ -17,6 +17,7 @@ import asyncio
 import os
 import sys
 import re
+import json
 import logging
 from datetime import datetime, timedelta, timezone
 
@@ -37,7 +38,12 @@ API_ADMIN_TOKEN = os.getenv("API_ADMIN_TOKEN", "")
 CHECK_INTERVAL = int(os.getenv("CHECK_INTERVAL_HOURS", "4"))
 LOOKBACK_HOURS = int(os.getenv("LOOKBACK_HOURS", "24"))
 
-SESSION_FILE = os.path.join(os.path.dirname(__file__), "session")
+# En Docker usa /app/data/session, localmente usa ./session en el directorio del script
+_data_dir = os.path.join(os.path.dirname(__file__), "data")
+if os.path.isdir(_data_dir):
+    SESSION_FILE = os.path.join(_data_dir, "session")
+else:
+    SESSION_FILE = os.path.join(os.path.dirname(__file__), "session")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -46,33 +52,78 @@ logging.basicConfig(
 )
 log = logging.getLogger("telegram-reader")
 
+# Archivo para persistir el último message ID procesado (evita reprocesar)
+_STATE_DIR = (
+    os.path.join(os.path.dirname(__file__), "data")
+    if os.path.isdir(os.path.join(os.path.dirname(__file__), "data"))
+    else os.path.dirname(__file__)
+)
+STATE_FILE = os.path.join(_STATE_DIR, "reader_state.json")
+
 # ── Funciones ────────────────────────────────────────────────────────────────
 
 
+def load_last_message_id() -> int | None:
+    """Lee el último message ID procesado exitosamente."""
+    try:
+        with open(STATE_FILE, encoding="utf-8") as f:
+            state = json.load(f)
+            return state.get("last_message_id")
+    except (FileNotFoundError, json.JSONDecodeError, KeyError):
+        return None
+
+
+def save_last_message_id(message_id: int) -> None:
+    """Guarda el último message ID procesado exitosamente."""
+    state = {
+        "last_message_id": message_id,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    try:
+        with open(STATE_FILE, "w", encoding="utf-8") as f:
+            json.dump(state, f, indent=2)
+    except OSError as ex:
+        log.warning("Could not save state file: %s", ex)
+
+
 def is_price_list(text: str) -> bool:
-    """Detecta si un mensaje es una lista de precios (5+ líneas con u$número)."""
-    count = sum(
-        1 for line in text.split("\n") if re.search(r"u\s*\$\s*\d", line, re.IGNORECASE)
+    """Detecta si un mensaje tiene al menos 1 precio (u$, usdt, us, usd)."""
+    return bool(
+        re.search(
+            r"u\s*s?\s*\$\s*\d|\d\s*us(?:dt?)?(?:\b|$)|usd\s+\d",
+            text,
+            re.IGNORECASE | re.MULTILINE,
+        )
     )
-    return count >= 5
+
+
+def sanitize_text(text: str) -> str:
+    """Elimina surrogates huérfanos que rompen JSON/PostgreSQL.
+    Usa encode/decode con 'surrogatepass'+'replace' para eliminar surrogates inválidos.
+    """
+    return (
+        text.encode("utf-8", errors="surrogatepass")
+        .decode("utf-8", errors="replace")
+        .replace("\ufffd", "")
+    )
 
 
 async def sync_to_backend(
     text: str, message_id: int, message_date: datetime
 ) -> dict | None:
     """Envía el texto al endpoint de sync del backend."""
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {API_ADMIN_TOKEN}",
-    }
+    headers = {"Content-Type": "application/json"}
+    if API_ADMIN_TOKEN:
+        headers["Authorization"] = f"Bearer {API_ADMIN_TOKEN}"
 
-    payload = {"text": text}
+    payload = {"text": sanitize_text(text)}
 
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
+        # verify=False para soportar certificados self-signed (IIS Express en dev)
+        async with httpx.AsyncClient(timeout=30, verify=False) as client:
             # Primero preview para ver qué detecta
             preview_resp = await client.post(
-                f"{API_BASE_URL}/api/admin/telegram/preview-prices",
+                f"{API_BASE_URL}/api/telegram/preview-prices",
                 json=payload,
                 headers=headers,
             )
@@ -96,7 +147,7 @@ async def sync_to_backend(
 
             # Sync real
             sync_resp = await client.post(
-                f"{API_BASE_URL}/api/admin/telegram/sync-prices",
+                f"{API_BASE_URL}/api/telegram/sync-prices",
                 json=payload,
                 headers=headers,
             )
@@ -158,11 +209,17 @@ async def read_group_messages(client: TelegramClient):
 
     # Leer mensajes de las últimas LOOKBACK_HOURS horas
     cutoff = datetime.now(timezone.utc) - timedelta(hours=LOOKBACK_HOURS)
+    last_processed_id = load_last_message_id()
     messages_processed = 0
     price_lists_found = 0
+    highest_synced_id = last_processed_id
 
     async for message in client.iter_messages(target, offset_date=cutoff, reverse=True):
         if not isinstance(message, Message):
+            continue
+
+        # Saltar mensajes ya procesados en ciclos anteriores
+        if last_processed_id is not None and message.id <= last_processed_id:
             continue
 
         text = message.text or message.message or ""
@@ -173,7 +230,9 @@ async def read_group_messages(client: TelegramClient):
 
         if is_price_list(text):
             price_lists_found += 1
-            msg_date = message.date.strftime("%Y-%m-%d %H:%M")
+            msg_date = (
+                message.date.strftime("%Y-%m-%d %H:%M") if message.date else "unknown"
+            )
             log.info(
                 "Price list found (msg #%d, %s, %d chars)",
                 message.id,
@@ -181,7 +240,16 @@ async def read_group_messages(client: TelegramClient):
                 len(text),
             )
 
-            await sync_to_backend(text, message.id, message.date)
+            result = await sync_to_backend(
+                text, message.id, message.date or datetime.now(timezone.utc)
+            )
+            if result is not None:
+                highest_synced_id = max(highest_synced_id or 0, message.id)
+
+    # Guardar el último message ID procesado exitosamente
+    if highest_synced_id is not None and highest_synced_id != last_processed_id:
+        save_last_message_id(highest_synced_id)
+        log.info("Last processed message ID saved: %d", highest_synced_id)
 
     log.info(
         "Done: %d messages scanned, %d price lists found",

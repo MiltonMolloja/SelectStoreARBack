@@ -52,6 +52,13 @@ public sealed class TelegramWebhookHandler(
 
         string telegramMsgId = message.MessageId.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
+        // Verificar si ya importamos este mensaje (protección contra re-delivery)
+        if (await productRepository.TelegramMessageIdExistsAsync(telegramMsgId, cancellationToken).ConfigureAwait(false))
+        {
+            logger.LogInformation("Telegram message {MessageId} already imported, skipping", telegramMsgId);
+            return new TelegramWebhookResult("ok", "duplicate", $"Message {telegramMsgId} already imported");
+        }
+
         // Buscar o crear categoría
         Category category = await FindOrCreateCategoryAsync(parsed.Category, cancellationToken).ConfigureAwait(false);
 

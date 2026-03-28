@@ -27,6 +27,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, IMediat
 
     public DbSet<ExternalLogin> ExternalLogins => Set<ExternalLogin>();
 
+    public DbSet<ProductPendingChange> ProductPendingChanges => Set<ProductPendingChange>();
+
+    public DbSet<PriceHistory> PriceHistories => Set<PriceHistory>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);

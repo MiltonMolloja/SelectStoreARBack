@@ -8,19 +8,55 @@ public static class TelegramEndpoints
     public static void MapTelegramEndpoints(this WebApplication app)
     {
         // ── Webhook del bot (llamado por Telegram automáticamente) ────────────
+        // Seguridad: valida X-Telegram-Bot-Api-Secret-Token internamente
         app.MapPost("/api/telegram/webhook", HandleWebhook)
             .WithTags("Telegram")
             .AllowAnonymous();
 
-        // ── Sync manual desde el admin (pegar texto de la lista) ─────────────
-        app.MapPost("/api/admin/telegram/sync-prices", SyncPricesManual)
-            .WithTags("Admin")
-            .RequireAuthorization("admin");
+        // ── Sync manual (pegar texto de la lista) ─────────────────────────────
+        // Seguridad: requiere Bearer token o JWT admin
+        app.MapPost("/api/telegram/sync-prices", SyncPricesManual)
+            .WithTags("Telegram")
+            .AllowAnonymous();
 
-        // ── Preview: parsear sin guardar (para testear el parser) ────────────
-        app.MapPost("/api/admin/telegram/preview-prices", PreviewPrices)
-            .WithTags("Admin")
-            .RequireAuthorization("admin");
+        // ── Preview: parsear sin guardar ─────────────────────────────────────
+        // Seguridad: requiere Bearer token o JWT admin
+        app.MapPost("/api/telegram/preview-prices", PreviewPrices)
+            .WithTags("Telegram")
+            .AllowAnonymous();
+    }
+
+    /// <summary>
+    /// Valida que el request tenga un Bearer token válido (API key o JWT admin).
+    /// El token se compara contra Telegram:SyncApiKey en la configuración.
+    /// Si el caller ya está autenticado como admin (JWT), también se acepta.
+    /// </summary>
+    private static bool IsAuthorizedForSync(HttpContext httpContext, IConfiguration configuration)
+    {
+        // Opción 1: JWT admin válido (ya autenticado por el middleware)
+        if (httpContext.User.Identity?.IsAuthenticated == true
+            && httpContext.User.HasClaim("role", "admin"))
+        {
+            return true;
+        }
+
+        // Opción 2: API key en el header Authorization: Bearer <key>
+        string? authHeader = httpContext.Request.Headers.Authorization.ToString();
+        if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        string token = authHeader["Bearer ".Length..].Trim();
+        string? expectedKey = configuration["Telegram:SyncApiKey"];
+
+        if (string.IsNullOrEmpty(expectedKey))
+        {
+            // Si no hay key configurada, rechazar siempre (fail-closed)
+            return false;
+        }
+
+        return string.Equals(token, expectedKey, StringComparison.Ordinal);
     }
 
     private static async Task<IResult> HandleWebhook(
@@ -86,9 +122,16 @@ public static class TelegramEndpoints
 
     private static async Task<IResult> SyncPricesManual(
         SyncPricesRequest request,
+        HttpContext httpContext,
         ISender sender,
+        IConfiguration configuration,
         CancellationToken cancellationToken)
     {
+        if (!IsAuthorizedForSync(httpContext, configuration))
+        {
+            return Results.Unauthorized();
+        }
+
         SyncPriceListResult result = await sender.Send(
             new SyncPriceListCommand(request.Text, "manual"),
             cancellationToken);
@@ -96,8 +139,16 @@ public static class TelegramEndpoints
         return Results.Ok(result);
     }
 
-    private static IResult PreviewPrices(SyncPricesRequest request)
+    private static IResult PreviewPrices(
+        SyncPricesRequest request,
+        HttpContext httpContext,
+        IConfiguration configuration)
     {
+        if (!IsAuthorizedForSync(httpContext, configuration))
+        {
+            return Results.Unauthorized();
+        }
+
         Application.Services.TelegramPriceListParser.PriceListResult parsed =
             Application.Services.TelegramPriceListParser.Parse(request.Text);
 

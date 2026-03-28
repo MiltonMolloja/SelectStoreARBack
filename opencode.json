@@ -1,6 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
-    "plugin": ["opencode-anthropic-login-via-cli"],
+  "plugin": ["opencode-anthropic-login-via-cli"],
   "mcp": {
     "context7": {
       "type": "remote",

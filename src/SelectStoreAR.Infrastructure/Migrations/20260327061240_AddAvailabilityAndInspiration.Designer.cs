@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using SelectStoreAR.Infrastructure.Persistence;
@@ -12,9 +13,11 @@ using SelectStoreAR.Infrastructure.Persistence;
 namespace SelectStoreAR.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260327061240_AddAvailabilityAndInspiration")]
+    partial class AddAvailabilityAndInspiration
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -327,47 +330,6 @@ namespace SelectStoreAR.Infrastructure.Migrations
                     b.ToTable("order_status_changes", (string)null);
                 });
 
-            modelBuilder.Entity("SelectStoreAR.Domain.Entities.PriceHistory", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("ChangedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("changed_at");
-
-                    b.Property<string>("ChangedBy")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("changed_by");
-
-                    b.Property<Guid?>("OrderId")
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("PriceUsd")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("price_usd");
-
-                    b.Property<Guid>("ProductId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Source")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("OrderId");
-
-                    b.HasIndex("ProductId")
-                        .HasDatabaseName("idx_price_history_product");
-
-                    b.ToTable("price_history", (string)null);
-                });
-
             modelBuilder.Entity("SelectStoreAR.Domain.Entities.Product", b =>
                 {
                     b.Property<Guid>("Id")
@@ -376,8 +338,10 @@ namespace SelectStoreAR.Infrastructure.Migrations
 
                     b.Property<string>("Availability")
                         .IsRequired()
+                        .ValueGeneratedOnAdd()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
+                        .HasDefaultValue("Unknown")
                         .HasColumnName("availability");
 
                     b.Property<decimal>("BasePriceUsd")
@@ -413,14 +377,6 @@ namespace SelectStoreAR.Infrastructure.Migrations
                     b.Property<bool>("IsFeatured")
                         .HasColumnType("boolean")
                         .HasColumnName("is_featured");
-
-                    b.Property<DateTime?>("LastSyncedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("last_synced_at");
-
-                    b.Property<string>("LastTelegramRaw")
-                        .HasColumnType("text")
-                        .HasColumnName("last_telegram_raw");
 
                     b.Property<decimal?>("MarkupPercentage")
                         .HasPrecision(5, 2)
@@ -528,115 +484,6 @@ namespace SelectStoreAR.Infrastructure.Migrations
                         .HasDatabaseName("idx_product_images_order");
 
                     b.ToTable("product_images", (string)null);
-                });
-
-            modelBuilder.Entity("SelectStoreAR.Domain.Entities.ProductPendingChange", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ChangeType")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasColumnName("change_type");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("created_at");
-
-                    b.Property<decimal?>("CurrentPriceUsd")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("current_price_usd");
-
-                    b.Property<Guid?>("ProductId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ProposedAvailability")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("proposed_availability");
-
-                    b.Property<string>("ProposedBrand")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("proposed_brand");
-
-                    b.Property<string>("ProposedCategory")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("proposed_category");
-
-                    b.Property<string>("ProposedDescription")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("proposed_description");
-
-                    b.Property<string>("ProposedInspiration")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)")
-                        .HasColumnName("proposed_inspiration");
-
-                    b.Property<string>("ProposedName")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)")
-                        .HasColumnName("proposed_name");
-
-                    b.Property<decimal>("ProposedPriceUsd")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("proposed_price_usd");
-
-                    b.Property<string>("RawTelegramText")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("raw_telegram_text");
-
-                    b.Property<string>("ReviewNote")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)")
-                        .HasColumnName("review_note");
-
-                    b.Property<DateTime?>("ReviewedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("reviewed_at");
-
-                    b.Property<string>("ReviewedBy")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("reviewed_by");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<string>("TelegramMessageId")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("telegram_msg_id");
-
-                    b.Property<Guid>("TelegramSyncBatchId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProductId")
-                        .HasDatabaseName("idx_pending_product");
-
-                    b.HasIndex("Status")
-                        .HasDatabaseName("idx_pending_status");
-
-                    b.HasIndex("TelegramSyncBatchId")
-                        .HasDatabaseName("idx_pending_batch");
-
-                    b.ToTable("product_pending_changes", (string)null);
                 });
 
             modelBuilder.Entity("SelectStoreAR.Domain.Entities.SiteConfig", b =>
@@ -755,24 +602,6 @@ namespace SelectStoreAR.Infrastructure.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("SelectStoreAR.Domain.Entities.PriceHistory", b =>
-                {
-                    b.HasOne("SelectStoreAR.Domain.Entities.Order", "Order")
-                        .WithMany()
-                        .HasForeignKey("OrderId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("SelectStoreAR.Domain.Entities.Product", "Product")
-                        .WithMany()
-                        .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Order");
-
-                    b.Navigation("Product");
-                });
-
             modelBuilder.Entity("SelectStoreAR.Domain.Entities.Product", b =>
                 {
                     b.HasOne("SelectStoreAR.Domain.Entities.Category", "Category")
@@ -791,16 +620,6 @@ namespace SelectStoreAR.Infrastructure.Migrations
                         .HasForeignKey("ProductId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-                });
-
-            modelBuilder.Entity("SelectStoreAR.Domain.Entities.ProductPendingChange", b =>
-                {
-                    b.HasOne("SelectStoreAR.Domain.Entities.Product", "Product")
-                        .WithMany()
-                        .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("Product");
                 });
 
             modelBuilder.Entity("SelectStoreAR.Domain.Entities.Category", b =>

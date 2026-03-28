@@ -22,9 +22,11 @@ appsettings.*.json
 !appsettings.json
 !appsettings.Development.json
 
-## Telegram session (contains auth token — never commit)
+## Telegram session & reader state (contains auth token — never commit)
 *.session
 *.session-journal
+reader_state.json
+tools/telegram-reader/data/
 
 ## Python
 __pycache__/

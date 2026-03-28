@@ -182,7 +182,7 @@ public sealed class TelegramPriceListParserTests
     [Fact]
     public void Parse_PriceOnSeparateLine_IsSkipped()
     {
-        // Precio en línea separada sin nombre → se ignora (edge case del canal)
+        // Precio en línea separada → usa la última línea descriptiva como nombre
         string text = """
             SAMSUNG A16 4G 128GB
             Nuevos - Sin Caja
@@ -191,7 +191,9 @@ public sealed class TelegramPriceListParserTests
 
         TelegramPriceListParser.PriceListResult result = TelegramPriceListParser.Parse(text);
 
-        // "u$110" en línea separada sin nombre antes del precio → skipped
-        result.Items.Should().HaveCount(0);
+        // "u$110" en línea separada → toma "Nuevos - Sin Caja" como nombre del producto
+        result.Items.Should().HaveCount(1);
+        result.Items[0].PriceUsd.Should().Be(110);
+        result.Items[0].AvailabilityStatus.Should().Be("available");
     }
 }

@@ -18,19 +18,14 @@ public sealed class GetDashboardHandler(
 
     public async Task<DashboardDto> Handle(GetDashboardQuery request, CancellationToken cancellationToken)
     {
-        Task<(IReadOnlyList<Product>, int)> allProductsTask = productRepository.GetPagedAsync(
-            1, 1000, status: null, cancellationToken: cancellationToken);
+        // DbContext is not thread-safe — queries must run sequentially.
+        (IReadOnlyList<Product> products, _) = await productRepository.GetPagedAsync(
+            1, 1000, status: null, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        Task<(IReadOnlyList<Order>, int)> allOrdersTask = orderRepository.GetPagedAsync(
-            1, 1000, cancellationToken: cancellationToken);
+        (IReadOnlyList<Order> orders, _) = await orderRepository.GetPagedAsync(
+            1, 1000, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        Task<ExchangeRate?> rateTask = exchangeRateRepository.GetActiveAsync(cancellationToken);
-
-        await Task.WhenAll(allProductsTask, allOrdersTask, rateTask).ConfigureAwait(false);
-
-        (IReadOnlyList<Product> products, _) = await allProductsTask.ConfigureAwait(false);
-        (IReadOnlyList<Order> orders, _) = await allOrdersTask.ConfigureAwait(false);
-        ExchangeRate? rate = await rateTask.ConfigureAwait(false);
+        ExchangeRate? rate = await exchangeRateRepository.GetActiveAsync(cancellationToken).ConfigureAwait(false);
 
         // Products stats
         ProductStatsDto productStats = new(

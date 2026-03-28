@@ -5,23 +5,17 @@ namespace SelectStoreAR.Application.Services;
 /// <summary>
 /// Parsea listas de precios del canal Telegram "NetShop ARG".
 ///
-/// Formato real observado:
-///   ARMAF                              ← encabezado de marca
-///   **Club de Nuit Sillage** 105ml u$36✅
-///   **Odyssey Mega** 100ml u$37✅
-///   **Odyssey Montagne** 100ml u$55✅🆕
-///   **His Confession** 100ml u$         ← sin precio → ignorar
-///
-///   PIXEL IMPORTADO
-///   9A 128 u$490🏭
-///   10 128 US u$680🏭
-///
-/// Indicadores de disponibilidad:
-///   ✅   = disponible / en stock
-///   🏭   = en depósito
-///   🛬   = llegando
-///   📭   = a pedido
-///   (sin precio) = sin stock / consultar → ignorar
+/// Formatos soportados:
+///   ARMAF                              ← encabezado de marca (mayúsculas)
+///   _Sillage 105ml u$36✅              ← sublista con prefijo _
+///   Club de Nuit:                      ← sub-sección (no cambia marca)
+///   💻Lenovo Gaming I5 u$655🏭         ← emoji pegado al nombre
+///   PARLANTE PORTATIL                  ← header sin precio
+///   🔊G200 Speaker 5W                  ← descripción en línea propia
+///   u$9✅                              ← precio en línea separada
+///   (Creed-Aventus)                    ← inspiración en línea propia → ignorar
+///   - Ceramic Pink/Rose Gold           ← variante → ignorar
+///   u$ / u$                            ← sin precio → ignorar
 /// </summary>
 public static class TelegramPriceListParser
 {
@@ -31,8 +25,8 @@ public static class TelegramPriceListParser
         string Category,
         decimal PriceUsd,
         string? SizeOrVariant,
-        string? Inspiration,        // ej: "Dior-Sauvage Elixir"
-        string AvailabilityStatus,  // "available" | "warehouse" | "arriving" | "on_demand"
+        string? Inspiration,
+        string AvailabilityStatus,
         string RawLine);
 
     public sealed record PriceListResult(
@@ -41,24 +35,34 @@ public static class TelegramPriceListParser
         int ParsedCount,
         int SkippedCount);
 
-    // Precio con número obligatorio: u$36, u$36.5, us$490, usd 490
-    private static readonly Regex PriceWithNumberRegex = new(
-        @"u\s*s?\s*\$\s*(\d[\d.,]*)(?:\s*a\s*(\d[\d.,]*))?|usd\s+(\d[\d.,]*)",
+    // Precio USD con número obligatorio: u$36, u$36.5, us$490, usd 490, 345usdt, 355us
+    // El punto final (u$1210.) se excluye del precio con lookahead
+    private static readonly Regex PriceUsdRegex = new(
+        @"u\s*s?\s*\$\s*(\d[\d.,]*)(?:\s*a\s*(\d[\d.,]*))?|usd\s+(\d[\d.,]*)|(\d[\d.,]*)\s*us(?:dt?)?(?:\b|$)",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    // Precio en pesos: $745, *$500 — los ignoramos (no son USD)
+    private static readonly Regex PricePesosOnlyRegex = new(
+        @"(?<!\w)[*]?\$\s*\d[\d.,]*",
+        RegexOptions.Compiled);
 
     // Tamaño: 100ml, 60ml, 1TB, 256GB, etc.
     private static readonly Regex SizeRegex = new(
         @"\b(\d+\s*(?:ml|gb|tb|mb|g))\b",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    // Descripción entre paréntesis: (Dior-Sauvage), (YSL-Y)
+    // Inspiración entre paréntesis: (Dior-Sauvage), (YSL-Y)
     private static readonly Regex InspirationRegex = new(
         @"\(([^)]{3,80})\)",
         RegexOptions.Compiled);
 
-    // Emojis y marcadores a eliminar del nombre
+    // Replacement char y emojis a eliminar del nombre final
     private static readonly Regex CleanNameRegex = new(
-        @"[✅🏭🛬📭🆕🎁📸📷🎥🎬🗣🚫👱‍♀️🧔‍♂️🐶🐾🌹🍰🥭👠🐍🦅🐝🦌🐎👸🏻👸🏼👨🏼‍🦱]|" +
+        @"[\uFFFD]|" +
+        @"[✅🏭🛬📭🆕🎁📸📷🎥🎬🗣🚫🔊🎤📽💻🥌🐶🐾🌹🍰🥭👠🐍🦅🐝🦌🐎]|" +
+        @"[\uD83C-\uDBFF][\uDC00-\uDFFF]|" +
+        @"[\u2600-\u27BF]|" +
+        @"[\uD83D][\uDC00-\uDFFF]|" +
         @"\*{1,2}|_{1,2}|~{1,2}|`{1,3}",
         RegexOptions.Compiled);
 
@@ -67,9 +71,13 @@ public static class TelegramPriceListParser
         @"^[-_•]\s*",
         RegexOptions.Compiled);
 
+    // Línea de variante: comienza con "- " y NO tiene precio USD
+    private static readonly Regex VariantLineRegex = new(
+        @"^-\s+\S",
+        RegexOptions.Compiled);
+
     public static PriceListResult Parse(string text)
     {
-        // Limpiar HTML del export de Telegram (si viene del HTML)
         string cleaned = CleanHtml(text);
 
         List<PriceListItem> items = [];
@@ -79,6 +87,7 @@ public static class TelegramPriceListParser
 
         string currentBrand = string.Empty;
         string currentCategory = string.Empty;
+        string lastDescriptionLine = string.Empty;
 
         foreach (string rawLine in lines)
         {
@@ -88,39 +97,67 @@ public static class TelegramPriceListParser
                 continue;
             }
 
-            // Saltar líneas informativas (notas, avisos, etc.)
+            // Variante de producto anterior (- Ceramic Pink) → ignorar
+            if (IsVariantLine(line))
+            {
+                skipped++;
+                continue;
+            }
+
+            // Línea informativa → ignorar
             if (IsInformationalLine(line))
             {
                 skipped++;
                 continue;
             }
 
-            // Verificar si tiene precio con número
-            Match priceMatch = PriceWithNumberRegex.Match(line);
+            // ¿Tiene precio USD con número?
+            Match priceMatch = PriceUsdRegex.Match(line);
 
             if (!priceMatch.Success)
             {
-                // Sin precio → puede ser encabezado de sección
+                // ¿Tiene solo precio en pesos? → ignorar sin alterar lastDescriptionLine
+                if (PricePesosOnlyRegex.IsMatch(line) && !PriceUsdRegex.IsMatch(line))
+                {
+                    skipped++;
+                    continue;
+                }
+
                 string strippedLine = CleanMarkdown(line);
 
                 if (IsLikelySectionHeader(strippedLine))
                 {
                     (currentBrand, currentCategory) = ParseSectionHeader(strippedLine);
+                    lastDescriptionLine = string.Empty;
+                }
+                else
+                {
+                    // Guardar como posible nombre si la siguiente línea es solo precio
+                    lastDescriptionLine = strippedLine;
                 }
 
                 skipped++;
                 continue;
             }
 
-            // Tiene precio con número → parsear como producto
             decimal price = ExtractPrice(priceMatch);
             if (price <= 0)
             {
+                // u$ sin número (sin stock) → no actualizar lastDescriptionLine
                 skipped++;
                 continue;
             }
 
             string namePart = ExtractNamePart(line, priceMatch.Index);
+
+            // Precio en línea sola → usar descripción de línea anterior
+            if (string.IsNullOrWhiteSpace(namePart) && !string.IsNullOrWhiteSpace(lastDescriptionLine))
+            {
+                namePart = lastDescriptionLine;
+            }
+
+            lastDescriptionLine = string.Empty;
+
             if (string.IsNullOrWhiteSpace(namePart))
             {
                 skipped++;
@@ -131,6 +168,12 @@ public static class TelegramPriceListParser
             string? inspiration = ExtractInspiration(line);
             string availability = DetectAvailability(line);
             string cleanName = BuildProductName(currentBrand, namePart, size);
+
+            if (string.IsNullOrWhiteSpace(cleanName))
+            {
+                skipped++;
+                continue;
+            }
 
             items.Add(new PriceListItem(
                 Name: cleanName,
@@ -149,13 +192,10 @@ public static class TelegramPriceListParser
 
     private static string CleanHtml(string text)
     {
-        // Convertir <br> a salto de línea
+        text = Regex.Replace(text, @"(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])", string.Empty);
         text = Regex.Replace(text, @"<br\s*/?>", "\n", RegexOptions.IgnoreCase);
-        // Preservar texto de <strong> y <em> sin las etiquetas
         text = Regex.Replace(text, @"</?(?:strong|em|b|i|u|s)>", string.Empty, RegexOptions.IgnoreCase);
-        // Eliminar otras etiquetas HTML
         text = Regex.Replace(text, @"<[^>]+>", string.Empty);
-        // Decodificar entidades HTML básicas
         text = text.Replace("&amp;", "&", StringComparison.Ordinal)
                    .Replace("&lt;", "<", StringComparison.Ordinal)
                    .Replace("&gt;", ">", StringComparison.Ordinal)
@@ -171,41 +211,134 @@ public static class TelegramPriceListParser
         return CleanNameRegex.Replace(text, string.Empty).Trim();
     }
 
+    private static bool IsVariantLine(string line)
+    {
+        // "- Ceramic Pink/Rose Gold" → variante, no producto
+        // Pero "- Aoud edition 60ml u$25✅" SÍ es producto (tiene precio)
+        return VariantLineRegex.IsMatch(line) && !PriceUsdRegex.IsMatch(line);
+    }
+
     private static bool IsInformationalLine(string line)
     {
+        // Si tiene precio USD nunca es informacional
+        if (PriceUsdRegex.IsMatch(line))
+        {
+            return false;
+        }
+
         string lower = line.ToLowerInvariant();
-        return lower.StartsWith("✅", StringComparison.Ordinal)
-            || lower.StartsWith("ℹ", StringComparison.Ordinal)
+        return lower.StartsWith("ℹ", StringComparison.Ordinal)
             || lower.Contains("no se hacen")
             || lower.Contains("garantia")
             || lower.Contains("garantía")
+            || lower.Contains("s/g sin")
             || lower.Contains("pedidos no tienen")
             || lower.Contains("no se escucha")
             || lower.Contains("pagos:")
             || lower.Contains("google maps")
             || lower.Contains("http")
-            || (lower.StartsWith("(", StringComparison.Ordinal) && !line.Contains("u$"))
+            || lower.Contains("silicone case")
+            || lower.Contains("el stock es bajo")
+            || (lower.StartsWith("(", StringComparison.Ordinal) && !line.Contains("u$", StringComparison.OrdinalIgnoreCase))
             || lower.Contains("vez número")
             || lower.Contains("retíralo ya")
             || lower.Contains("llegando")
             || lower.Contains("deposito")
-            || lower.Contains("a pedido");
+            || lower.Contains("a pedido")
+            || lower.Contains("no son la")
+            || lower.Contains("incluye ")
+            || lower.Contains("preactivado")
+            || lower.Contains("sin garantía")
+            || lower == "lte"
+            || lower == "5g"
+            || lower == "4g";
     }
+
+    private static readonly string[] KnownBrandKeywords =
+    [
+        // Celulares
+        "IPHONE", "APPLE", "IPAD", "MACBOOK", "AIRPODS",
+        "SAMSUNG", "GALAXY",
+        "XIAOMI", "REDMI", "POCO",
+        "PIXEL", "GOOGLE",
+        "MOTOROLA", "MOTO",
+        "REALME", "INFINIX", "TECNO", "OPPO", "VIVO",
+        "ONEPLUS", "HONOR", "HUAWEI",
+        // Consolas / VR / Gaming
+        "PLAYSTATION", "PS5", "PS4", "XBOX", "NINTENDO", "SWITCH",
+        "META QUEST", "QUEST", "VR",
+        "DUALSENSE", "JOYSTICK",
+        // Cámaras / Drones
+        "CANON", "SONY", "NIKON", "GOPRO", "FUJIFILM", "INSTA360",
+        "DJI", "DRONE", "OSMO",
+        // Laptops / Monitores / TVs
+        "LAPTOP", "NOTEBOOK", "LENOVO", "HP", "DELL", "ACER", "ASUS",
+        "MONITOR", "ALIENWARE",
+        "SAMSUNG TV", "SMART TV", "QLED", "NOBLEX", "TCL", "LG", "PHILIPS",
+        // Audio / Accesorios
+        "JBL", "PARTYBOX", "BOSE", "BEATS", "SONY WH",
+        "PARLANTE", "SPEAKER", "HEADPHONE", "EARBUDS",
+        "GARMIN", "SMARTWATCH", "FORERUNNER", "FENIX",
+        "RAYBAN", "RAY-BAN", "RAY BAN",
+        // Tablets / Smart Home
+        "TABLET", "AMAZON", "ECHO", "KINDLE", "ALEXA", "CHROMECAST",
+        // Electrodomésticos
+        "DYSON", "ASPIRADORA",
+        "PROYECTOR", "FREESTYLE",
+        // Varios
+        "CLASIFICADORA", "CARGADOR PORTATIL", "POWER BANK",
+        // Perfumes
+        "PERFUME", "EDP", "EDT",
+        "LATTAFA", "ARMAF", "AFNAN",
+        "RASASI", "MAISON ALHAMBRA", "AL HARAMAIN", "LANCOME", "ARMANI",
+        "PACO RABANNE", "XERJOFF", "MONT BLANC", "ANFAR", "BHARARA",
+        "DUMONT", "ASDAAF", "AL WATANIAH", "RAYHAAN", "FRENCH AVENUE",
+        "EMPORIO",
+    ];
+
+    // Sub-secciones que NO deben cambiar el brand actual
+    private static readonly HashSet<string> KnownSubSections = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "LTE", "5G", "4G", "5G LTE",
+        "IPHONE NUEVOS", "IPHONE CPO", "IPHONE USADOS",
+        "MAC MINI", "MAC STUDIO", "IMAC", "IMAC M4", "IMAC M3",
+        "WATCH", "AIRPODS", "IPAD",
+        "NUEVOS", "CPO", "REACONDICIONADOS",
+        "WATCH SAMSUNG", "GALAXY WATCH",
+    };
 
     private static bool IsLikelySectionHeader(string line)
     {
-        if (line.Length < 2 || line.Length > 60)
+        if (line.Length < 2 || line.Length > 80)
         {
             return false;
         }
 
-        // Si tiene paréntesis con precio de referencia → no es header
-        if (line.Contains("u$", StringComparison.OrdinalIgnoreCase))
+        if (PriceUsdRegex.IsMatch(line))
         {
             return false;
         }
 
-        // Mayúsculas predominantes → header
+        // Termina con ":" → sub-sección → NO cambiar brand
+        if (line.TrimEnd().EndsWith(":", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        // Sub-sección conocida → NO cambiar brand
+        string trimmed = line.Trim().TrimEnd(':');
+        if (KnownSubSections.Contains(trimmed))
+        {
+            return false;
+        }
+
+        string upper = line.ToUpperInvariant();
+
+        if (KnownBrandKeywords.Any(k => upper.Contains(k, StringComparison.Ordinal)))
+        {
+            return true;
+        }
+
         int upperCount = line.Count(char.IsUpper);
         int letterCount = line.Count(char.IsLetter);
 
@@ -216,33 +349,51 @@ public static class TelegramPriceListParser
     {
         string upper = header.ToUpperInvariant().Trim();
 
-        // Detectar categoría por palabras clave
         string category = upper switch
         {
-            _ when ContainsAny(upper, "IPHONE", "APPLE", "IPAD", "MACBOOK", "AIRPODS") => "Celulares",
-            _ when ContainsAny(upper, "SAMSUNG", "GALAXY") => "Celulares",
-            _ when ContainsAny(upper, "XIAOMI", "REDMI", "POCO") => "Celulares",
-            _ when ContainsAny(upper, "PIXEL", "GOOGLE") => "Celulares",
-            _ when ContainsAny(upper, "PLAYSTATION", "PS5", "PS4", "XBOX", "NINTENDO", "SWITCH") => "Consolas",
+            _ when ContainsAny(upper, "IPHONE", "APPLE", "AIRPODS") => "Celulares",
+            _ when ContainsAny(upper, "SAMSUNG", "GALAXY") && !ContainsAny(upper, "MONITOR", "TV", "SMART TV") => "Celulares",
+            _ when ContainsAny(upper, "XIAOMI", "REDMI", "POCO") && !ContainsAny(upper, "ASPIRADORA", "MIJIA") => "Celulares",
+            _ when ContainsAny(upper, "PIXEL", "GOOGLE") && !ContainsAny(upper, "TV", "CHROMECAST") => "Celulares",
+            _ when ContainsAny(upper, "MOTOROLA", "REALME", "INFINIX", "TECNO", "OPPO", "VIVO", "ONEPLUS", "HONOR", "HUAWEI") => "Celulares",
+            _ when ContainsAny(upper, "PLAYSTATION", "PS5", "PS4", "XBOX", "DUALSENSE") => "Consolas",
+            _ when ContainsAny(upper, "NINTENDO", "SWITCH") => "Consolas",
+            _ when ContainsAny(upper, "META QUEST", "QUEST", "VR2") => "Consolas",
             _ when IsPerfumeBrand(upper) => "Perfumes",
-            _ when ContainsAny(upper, "CANON", "SONY", "NIKON", "GOPRO", "FUJIFILM", "INSTA360") => "Camaras",
-            _ when ContainsAny(upper, "LAPTOP", "MACBOOK", "NOTEBOOK", "LENOVO", "HP", "DELL") => "Laptops",
+            _ when ContainsAny(upper, "CANON", "NIKON", "GOPRO", "FUJIFILM", "INSTA360") => "Camaras",
+            _ when ContainsAny(upper, "DJI", "DRONE", "OSMO") => "Camaras",
+            _ when ContainsAny(upper, "MACBOOK", "LAPTOP", "NOTEBOOK", "LENOVO", "HP", "DELL", "ACER", "ASUS") => "Laptops",
+            _ when ContainsAny(upper, "MONITOR", "ALIENWARE") => "Monitores",
+            _ when ContainsAny(upper, "SMART TV", "QLED", "OLED TV", "NOBLEX", "TCL", "PHILIPS") => "TVs",
+            _ when ContainsAny(upper, "LG") && ContainsAny(upper, "TV", "NANO") => "TVs",
             _ when ContainsAny(upper, "TABLET", "IPAD") => "Tablets",
+            _ when ContainsAny(upper, "KINDLE") => "Tablets",
+            _ when ContainsAny(upper, "AMAZON", "ECHO", "ALEXA", "CHROMECAST") => "SmartHome",
+            _ when ContainsAny(upper, "GARMIN", "SMARTWATCH", "FORERUNNER", "FENIX", "INSTINCT") => "Smartwatches",
+            _ when ContainsAny(upper, "JBL", "BOSE", "BEATS", "PARTYBOX", "PARLANTE", "SPEAKER") => "Audio",
+            _ when ContainsAny(upper, "PROYECTOR", "FREESTYLE") => "Audio",
+            _ when ContainsAny(upper, "DYSON") => "Electrodomesticos",
+            _ when ContainsAny(upper, "ASPIRADORA", "MIJIA") => "Electrodomesticos",
+            _ when ContainsAny(upper, "RAYBAN", "RAY-BAN", "RAY BAN") => "Accesorios",
+            _ when ContainsAny(upper, "VARIOS", "CLASIFICADORA", "CARGADOR", "POWER BANK") => "Varios",
             _ => "Tecnologia",
         };
 
-        // Limpiar el nombre de la marca (capitalizar)
-        string brand = ToTitleCase(header.Trim());
+        // Limpiar emojis y replacement chars del brand
+        string brand = CleanMarkdown(ToTitleCase(header.Trim()));
+        brand = Regex.Replace(brand, @"\s{2,}", " ").Trim().TrimEnd(':');
 
         return (brand, category);
     }
 
     private static decimal ExtractPrice(Match match)
     {
-        // Prioridad: grupo 3 (usd X) > grupo 1 (u$X) > mínimo del rango
-        string rawPrice = match.Groups[3].Success ? match.Groups[3].Value : match.Groups[1].Value;
+        string rawPrice = match.Groups[3].Success ? match.Groups[3].Value
+                        : match.Groups[4].Success ? match.Groups[4].Value
+                        : match.Groups[1].Value;
 
-        rawPrice = rawPrice.Replace(".", string.Empty, StringComparison.Ordinal)
+        rawPrice = rawPrice.TrimEnd('.')
+                           .Replace(".", string.Empty, StringComparison.Ordinal)
                            .Replace(",", ".", StringComparison.Ordinal)
                            .Trim();
 
@@ -254,19 +405,10 @@ public static class TelegramPriceListParser
     {
         string before = line[..priceIndex].Trim();
 
-        // Eliminar prefijos de sublista (_ - •)
         before = SublistPrefixRegex.Replace(before, string.Empty);
-
-        // Eliminar indicadores de disponibilidad del nombre
         before = Regex.Replace(before, @"[✅🏭🛬📭🆕🎁]", string.Empty).Trim();
-
-        // Eliminar markdown
         before = CleanMarkdown(before);
-
-        // Eliminar inspiraciones entre paréntesis del nombre
         before = InspirationRegex.Replace(before, string.Empty).Trim();
-
-        // Limpiar múltiples espacios
         return Regex.Replace(before, @"\s{2,}", " ").Trim();
     }
 
@@ -292,7 +434,6 @@ public static class TelegramPriceListParser
         }
 
         string inspiration = match.Groups[1].Value.Trim();
-        // Solo retornar si parece una referencia a perfume/producto (contiene guión)
         return inspiration.Contains('-', StringComparison.Ordinal) ? inspiration : null;
     }
 
@@ -318,20 +459,23 @@ public static class TelegramPriceListParser
             return "on_demand";
         }
 
-        return "available"; // Si tiene precio pero sin emoji, asumir disponible
+        return "available";
     }
 
     private static string BuildProductName(string brand, string namePart, string? size)
     {
-        // Remover el tamaño del nombre para evitar duplicarlo
         string nameWithoutSize = size is not null
             ? Regex.Replace(namePart, Regex.Escape(size), string.Empty, RegexOptions.IgnoreCase).Trim()
             : namePart;
 
         nameWithoutSize = Regex.Replace(nameWithoutSize, @"\s{2,}", " ").Trim();
-        nameWithoutSize = nameWithoutSize.Trim([',', '-', '.']);
+        nameWithoutSize = nameWithoutSize.Trim([',', '-', '.', ':', ' ']);
 
-        // No agregar la marca si ya está en el nombre
+        if (string.IsNullOrWhiteSpace(nameWithoutSize))
+        {
+            return string.Empty;
+        }
+
         if (!string.IsNullOrEmpty(brand) &&
             !nameWithoutSize.Contains(brand, StringComparison.OrdinalIgnoreCase))
         {
@@ -355,10 +499,12 @@ public static class TelegramPriceListParser
     {
         string[] brands =
         [
-            "PERFUME", "EDP", "EDT", "LATTAFA", "ARMAF", "AFNAN",
-            "RASASI", "MAISON ALHAMBRA", "AL HARAMAIN", "LANCOME", "ARMANI",
-            "PACO RABANNE", "XERJOFF", "MONT BLANC", "ANFAR", "BHARARA", "DUMONT",
-            "ASDAAF", "AL WATANIAH", "RAYHAAN", "FRENCH AVENUE",
+            "PERFUME", "EDP", "EDT",
+            "LATTAFA", "ARMAF", "AFNAN", "RASASI",
+            "MAISON ALHAMBRA", "AL HARAMAIN", "LANCOME", "LANCÔME",
+            "ARMANI", "EMPORIO ARMANI",
+            "PACO RABANNE", "XERJOFF", "MONT BLANC", "ANFAR", "BHARARA",
+            "DUMONT", "ASDAAF", "AL WATANIAH", "RAYHAAN", "FRENCH AVENUE",
         ];
         return brands.Any(b => upper.Contains(b, StringComparison.OrdinalIgnoreCase));
     }

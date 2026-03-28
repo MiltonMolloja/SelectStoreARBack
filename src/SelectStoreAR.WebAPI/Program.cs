@@ -245,6 +245,7 @@ try
     app.MapExchangeRateEndpoints();
     app.MapAdminEndpoints();
     app.MapTelegramEndpoints();
+    app.MapPendingChangesEndpoints();
 
     app.MapGet("/health", async (IServiceProvider services) =>
     {

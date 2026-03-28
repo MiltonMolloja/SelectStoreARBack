@@ -15,17 +15,11 @@ public sealed class GetLandingDataHandler(
 {
     public async Task<LandingDto> Handle(GetLandingDataQuery request, CancellationToken cancellationToken)
     {
-        Task<IReadOnlyList<Category>> categoriesTask = categoryRepository.GetRootCategoriesAsync(cancellationToken);
-        Task<IReadOnlyList<Product>> featuredTask = productRepository.GetFeaturedAsync(8, cancellationToken);
-        Task<ExchangeRate?> rateTask = exchangeRateRepository.GetActiveAsync(cancellationToken);
-        Task<IReadOnlyList<SiteConfig>> configsTask = siteConfigRepository.GetAllAsync(cancellationToken);
-
-        await Task.WhenAll(categoriesTask, featuredTask, rateTask, configsTask).ConfigureAwait(false);
-
-        IReadOnlyList<Category> categories = await categoriesTask.ConfigureAwait(false);
-        IReadOnlyList<Product> featuredProducts = await featuredTask.ConfigureAwait(false);
-        ExchangeRate? exchangeRate = await rateTask.ConfigureAwait(false);
-        IReadOnlyList<SiteConfig> configs = await configsTask.ConfigureAwait(false);
+        // DbContext is not thread-safe — queries must run sequentially.
+        IReadOnlyList<Category> categories = await categoryRepository.GetRootCategoriesAsync(cancellationToken).ConfigureAwait(false);
+        IReadOnlyList<Product> featuredProducts = await productRepository.GetFeaturedAsync(8, cancellationToken).ConfigureAwait(false);
+        ExchangeRate? exchangeRate = await exchangeRateRepository.GetActiveAsync(cancellationToken).ConfigureAwait(false);
+        IReadOnlyList<SiteConfig> configs = await siteConfigRepository.GetAllAsync(cancellationToken).ConfigureAwait(false);
 
         Dictionary<string, string> configMap = configs.ToDictionary(c => c.Key, c => c.Value);
 

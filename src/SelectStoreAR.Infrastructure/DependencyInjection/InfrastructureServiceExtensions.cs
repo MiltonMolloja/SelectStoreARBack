@@ -1,7 +1,8 @@
 using Microsoft.EntityFrameworkCore;
-
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Npgsql;
 using SelectStoreAR.Application.Interfaces;
 using SelectStoreAR.Domain.Interfaces;
 using SelectStoreAR.Infrastructure.Persistence;
@@ -23,11 +24,20 @@ public static class InfrastructureServiceExtensions
 
         services.AddDbContext<AppDbContext>(options =>
         {
-            options.UseNpgsql(connectionString, npgsql =>
+            NpgsqlDataSourceBuilder dataSourceBuilder = new(connectionString);
+            dataSourceBuilder.EnableDynamicJson();
+            NpgsqlDataSource dataSource = dataSourceBuilder.Build();
+
+            options.UseNpgsql(dataSource, npgsql =>
             {
                 npgsql.EnableRetryOnFailure(3);
                 npgsql.MigrationsAssembly(typeof(AppDbContext).Assembly.FullName);
             });
+
+            // Suprimir warning de cambios pendientes en el modelo cuando el esquema
+            // real de la DB ya es correcto (ej: quitar HasDefaultValue sin cambio de columna)
+            options.ConfigureWarnings(w =>
+                w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
         });
 
         // Redis
@@ -53,6 +63,11 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<IExchangeRateRepository, ExchangeRateRepository>();
         services.AddScoped<ISiteConfigRepository, SiteConfigRepository>();
         services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<IPendingChangeRepository, PendingChangeRepository>();
+        services.AddScoped<IPriceHistoryRepository, PriceHistoryRepository>();
+
+        // Notifications (stub — replace with Twilio/Email in Phase 7)
+        services.AddScoped<INotificationService, NoOpNotificationService>();
 
         // Cache
         services.AddScoped<ICacheService, CacheService>();
@@ -71,10 +86,23 @@ public static class InfrastructureServiceExtensions
 
     public static async Task MigrateAndSeedAsync(IServiceProvider serviceProvider)
     {
-        using IServiceScope scope = serviceProvider.CreateScope();
-        AppDbContext dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        try
+        {
+            using IServiceScope scope = serviceProvider.CreateScope();
+            AppDbContext dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-        await dbContext.Database.MigrateAsync().ConfigureAwait(false);
-        await DbSeeder.SeedAsync(dbContext).ConfigureAwait(false);
+            await dbContext.Database.MigrateAsync().ConfigureAwait(false);
+            await DbSeeder.SeedAsync(dbContext).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            // Don't crash the app if DB is unavailable at startup.
+            // The health endpoint will report the DB as unhealthy.
+            ILogger<AppDbContext> logger = serviceProvider
+                .GetRequiredService<ILoggerFactory>()
+                .CreateLogger<AppDbContext>();
+
+            logger.LogError(ex, "Failed to migrate/seed database at startup. The app will continue but DB-dependent features will fail until the database is available.");
+        }
     }
 }

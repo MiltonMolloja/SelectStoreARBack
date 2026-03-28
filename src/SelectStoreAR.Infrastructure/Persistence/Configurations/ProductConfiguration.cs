@@ -59,6 +59,24 @@ public sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
             .HasColumnName("telegram_msg_id")
             .HasMaxLength(50);
 
+        builder.Property(p => p.Availability)
+            .HasConversion<string>()
+            .HasColumnName("availability")
+            .HasMaxLength(20)
+            .IsRequired();
+
+        builder.Property(p => p.Inspiration)
+            .HasColumnName("inspiration")
+            .HasMaxLength(200);
+
+        builder.Property(p => p.LastTelegramRaw)
+            .HasColumnName("last_telegram_raw")
+            .HasColumnType("text");
+
+        builder.Property(p => p.LastSyncedAt)
+            .HasColumnName("last_synced_at")
+            .HasColumnType("timestamptz");
+
         builder.Property(p => p.IsDeleted)
             .HasColumnName("is_deleted");
 

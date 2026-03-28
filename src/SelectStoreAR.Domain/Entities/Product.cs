@@ -39,6 +39,16 @@ public sealed class Product : BaseEntity
 
     public string? TelegramMessageId { get; private set; }
 
+    public AvailabilityStatus Availability { get; private set; }
+
+    public string? Inspiration { get; private set; }
+
+    /// <summary>Línea cruda del último mensaje de Telegram procesado.</summary>
+    public string? LastTelegramRaw { get; private set; }
+
+    /// <summary>Fecha del último sync desde Telegram.</summary>
+    public DateTime? LastSyncedAt { get; private set; }
+
     public bool IsDeleted { get; private set; }
 
     public DateTime CreatedAt { get; private set; }
@@ -66,6 +76,7 @@ public sealed class Product : BaseEntity
             CategoryId = categoryId,
             Specifications = specifications ?? [],
             Status = ProductStatus.Draft,
+            Availability = AvailabilityStatus.Unknown,
             IsFeatured = false,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow,
@@ -100,6 +111,21 @@ public sealed class Product : BaseEntity
         if (_images.Count == 0)
         {
             throw new DomainException("Product must have at least one image to publish");
+        }
+
+        Status = ProductStatus.Active;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Activa el producto sin requerir imágenes. Solo para importaciones automáticas
+    /// desde fuentes externas (Telegram, etc.) donde las imágenes se agregan después.
+    /// </summary>
+    public void ActivateFromImport()
+    {
+        if (Status == ProductStatus.Deleted)
+        {
+            throw new DomainException("Cannot activate a deleted product");
         }
 
         Status = ProductStatus.Active;
@@ -149,6 +175,52 @@ public sealed class Product : BaseEntity
     {
         IsFeatured = featured;
         UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void SetAvailability(AvailabilityStatus availability)
+    {
+        Availability = availability;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void SetInspiration(string? inspiration)
+    {
+        Inspiration = inspiration;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Registra que este producto fue procesado por un sync de Telegram.
+    /// </summary>
+    public void SetTelegramSync(string rawLine)
+    {
+        LastTelegramRaw = rawLine;
+        LastSyncedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Aplica los campos propuestos desde un PendingChange aprobado.
+    /// </summary>
+    public void ApplyApprovedChange(ProductPendingChange change)
+    {
+        if (change.ChangeType == Enums.PendingChangeType.PriceChanged
+            || change.ProposedPriceUsd.Amount != BasePriceUsd.Amount)
+        {
+            BasePriceUsd = change.ProposedPriceUsd;
+        }
+
+        if (change.ProposedAvailability != Availability)
+        {
+            Availability = change.ProposedAvailability;
+        }
+
+        if (change.ProposedInspiration != Inspiration)
+        {
+            Inspiration = change.ProposedInspiration;
+        }
+
+        UpdatedAt = DateTime.UtcNow;
+        AddDomainEvent(new ProductUpdatedEvent(Id));
     }
 
     public void AddImage(string url, int order)
