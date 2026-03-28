@@ -172,6 +172,20 @@ try
     app.UseSerilogRequestLogging();
     app.UseExceptionHandler();
 
+    // Servir imágenes de productos desde /uploads/
+    string uploadsPath = Path.Combine(Directory.GetCurrentDirectory(), "uploads");
+    Directory.CreateDirectory(uploadsPath);
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(uploadsPath),
+        RequestPath = "/uploads",
+        OnPrepareResponse = ctx =>
+        {
+            // Cache de imágenes por 7 días
+            ctx.Context.Response.Headers.CacheControl = "public, max-age=604800";
+        },
+    });
+
     if (app.Environment.IsDevelopment())
     {
         // OpenAPI JSON spec: /openapi/v1.json

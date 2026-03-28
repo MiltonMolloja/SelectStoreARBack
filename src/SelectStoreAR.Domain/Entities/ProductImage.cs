@@ -31,8 +31,8 @@ public sealed class ProductImage : BaseEntity
             Id = Guid.NewGuid(),
             ProductId = productId,
             Url = url,
-            ThumbnailUrl = url.Replace("/original", "/thumb", StringComparison.Ordinal),
-            MediumUrl = url.Replace("/original", "/medium", StringComparison.Ordinal),
+            ThumbnailUrl = url.Replace("original-", "thumb-", StringComparison.Ordinal),
+            MediumUrl = url.Replace("original-", "medium-", StringComparison.Ordinal),
             SortOrder = order,
             CreatedAt = DateTime.UtcNow,
         };

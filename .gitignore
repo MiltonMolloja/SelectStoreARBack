@@ -38,6 +38,10 @@ __pycache__/
 ## VS Code
 .vscode/
 
+## Uploaded images (local storage)
+uploads/
+src/SelectStoreAR.WebAPI/uploads/
+
 ## Docker volumes (local)
 postgres-data/
 redis-data/

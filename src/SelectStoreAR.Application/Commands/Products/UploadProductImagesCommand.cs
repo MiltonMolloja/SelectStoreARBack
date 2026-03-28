@@ -34,7 +34,7 @@ public sealed class UploadProductImagesHandler(
 
         foreach ((Stream stream, string fileName) in request.Files)
         {
-            string url = await imageService.SaveImageAsync(stream, fileName, request.ProductId, cancellationToken).ConfigureAwait(false);
+            string url = await imageService.SaveImageAsync(stream, fileName, request.ProductId, product.Slug.Value, cancellationToken).ConfigureAwait(false);
             product.AddImage(url, currentOrder++);
         }
 
