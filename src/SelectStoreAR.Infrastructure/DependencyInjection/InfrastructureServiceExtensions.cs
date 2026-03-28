@@ -66,8 +66,10 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<IPendingChangeRepository, PendingChangeRepository>();
         services.AddScoped<IPriceHistoryRepository, PriceHistoryRepository>();
 
-        // Notifications (stub — replace with Twilio/Email in Phase 7)
-        services.AddScoped<INotificationService, NoOpNotificationService>();
+        // Notifications: WhatsApp (Twilio) + Email (SMTP) via composite
+        services.AddScoped<TwilioWhatsAppService>();
+        services.AddScoped<EmailNotificationService>();
+        services.AddScoped<INotificationService, CompositeNotificationService>();
 
         // Cache
         services.AddScoped<ICacheService, CacheService>();

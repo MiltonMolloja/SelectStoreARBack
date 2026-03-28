@@ -36,6 +36,29 @@ public static class OrderEndpoints
             .RequireAuthorization("admin")
             .Produces<OrderDto>()
             .Produces(StatusCodes.Status404NotFound);
+
+        // Registrar precio al enviar cotización por WhatsApp
+        group.MapPost("/{orderId:guid}/quote-sent", RecordQuoteSent)
+            .WithName("RecordQuoteSent")
+            .RequireAuthorization("admin");
+    }
+
+    private static async Task<IResult> RecordQuoteSent(
+        Guid orderId,
+        RecordQuoteRequest body,
+        ISender sender,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
+    {
+        string quotedBy = httpContext.User.Identity?.Name ?? "admin";
+
+        RecordWhatsAppQuoteResult result = await sender.Send(
+            new RecordWhatsAppQuoteCommand(body.ProductId, orderId, quotedBy),
+            cancellationToken);
+
+        return result.Success
+            ? Results.Ok(result)
+            : Results.BadRequest(result);
     }
 
     private static async Task<IResult> PlaceOrder(
@@ -100,3 +123,5 @@ public static class OrderEndpoints
 }
 
 public sealed record UpdateOrderStatusRequest(string Status, string? DepositType, string? Notes);
+
+public sealed record RecordQuoteRequest(Guid ProductId);
