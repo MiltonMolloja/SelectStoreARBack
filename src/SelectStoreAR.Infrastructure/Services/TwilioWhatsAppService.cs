@@ -77,23 +77,23 @@ public sealed class TwilioWhatsAppService : INotificationService
         string shortBatch = batchId.ToString()[..8];
         List<string> lines =
         [
-            $"*SelectStoreAR* — Cambios pendientes",
+            "SelectStoreAR - Cambios pendientes",
             string.Empty,
         ];
 
         if (newCount > 0)
         {
-            lines.Add($"*NUEVOS:* {newCount} productos");
+            lines.Add($"NUEVOS: {newCount} productos");
         }
 
         if (priceChangedCount > 0)
         {
-            lines.Add($"*PRECIO CAMBIA:* {priceChangedCount} productos");
+            lines.Add($"PRECIO CAMBIA: {priceChangedCount} productos");
         }
 
         lines.Add(string.Empty);
         lines.Add($"Aprobar: {_adminUrl}/pending/batch/{batchId}");
-        lines.Add($"_Batch: {shortBatch}_");
+        lines.Add($"Batch: {shortBatch}");
 
         return string.Join("\n", lines);
     }
