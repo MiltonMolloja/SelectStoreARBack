@@ -40,6 +40,10 @@ try
     string jwtIssuer = builder.Configuration["Auth:JwtIssuer"] ?? "selectstorear";
     string jwtAudience = builder.Configuration["Auth:JwtAudience"] ?? "selectstorear";
 
+    // Deshabilitar el mapeo automático de claims de JWT (convierte "role" a ClaimTypes.Role)
+    System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
+    System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler.DefaultOutboundClaimTypeMap.Clear();
+
     builder.Services
         .AddAuthentication(options =>
         {
@@ -58,6 +62,7 @@ try
                 ValidAudience = jwtAudience,
                 IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
                 RoleClaimType = "role",
+                NameClaimType = "name",
             };
 
             // Leer el JWT desde la cookie httpOnly
@@ -95,7 +100,10 @@ try
     builder.Services.AddAuthorization(options =>
     {
         options.AddPolicy("admin", policy =>
-            policy.RequireClaim("role", "admin"));
+            policy.RequireAssertion(ctx =>
+                ctx.User.HasClaim("role", "admin") ||
+                ctx.User.HasClaim(System.Security.Claims.ClaimTypes.Role, "admin") ||
+                ctx.User.IsInRole("admin")));
     });
 
     // ── Security headers ────────────────────────────────────────────────────

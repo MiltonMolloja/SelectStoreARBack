@@ -8,7 +8,9 @@
     },
     "obsidian": {
       "type": "local",
-      "command": ["npx", "-y", "mcp-obsidian", "C:\\Notas\\Milton"]
+      "command": ["npx", "-y", "@fazer-ai/mcp-obsidian", "C:\\Notas\\Milton"],
+      "enabled": true,
+      "timeout": 30000
     }
   }
 }

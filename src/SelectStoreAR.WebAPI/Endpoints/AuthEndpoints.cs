@@ -28,6 +28,18 @@ public static class AuthEndpoints
         group.MapGet("/me", GetCurrentUser).RequireAuthorization();
         group.MapPost("/logout", Logout);
 
+        // Dev-only: genera JWT de admin sin OAuth (solo en Development)
+        if (app.Environment.IsDevelopment())
+        {
+            group.MapPost("/dev-admin-token", DevAdminToken)
+                .AllowAnonymous()
+                .WithDescription("DEV ONLY — genera JWT de admin para testing");
+
+            group.MapGet("/dev-claims", (HttpContext ctx) =>
+                Results.Ok(ctx.User.Claims.Select(c => new { c.Type, c.Value }).ToList()))
+                .AllowAnonymous();
+        }
+
         // User profile
         RouteGroupBuilder userGroup = app.MapGroup("/api/user").WithTags("User");
         userGroup.MapGet("/orders", GetUserOrders).RequireAuthorization();
@@ -163,4 +175,28 @@ public static class AuthEndpoints
 
     private static string CookieScheme(string provider) =>
         provider == "Google" ? "Google" : "Facebook";
+
+    /// <summary>
+    /// DEV ONLY — genera un JWT de admin sin OAuth para testing local.
+    /// Solo disponible en Development.
+    /// </summary>
+    private static IResult DevAdminToken(
+        SelectStoreAR.Application.Interfaces.IJwtService jwtService,
+        Microsoft.Extensions.Configuration.IConfiguration configuration)
+    {
+        string secret = configuration["Auth:JwtSecret"] ?? string.Empty;
+        if (string.IsNullOrEmpty(secret))
+        {
+            return Results.Problem("Auth:JwtSecret not configured");
+        }
+
+        // Crear un usuario admin ficticio para dev
+        SelectStoreAR.Domain.Entities.User adminUser = SelectStoreAR.Domain.Entities.User.Create(
+            "dev-admin@selectstorear.com",
+            "Dev Admin",
+            "admin");
+
+        string token = jwtService.GenerateToken(adminUser);
+        return Results.Ok(new { token, expiresIn = "7 days", role = "admin" });
+    }
 }
