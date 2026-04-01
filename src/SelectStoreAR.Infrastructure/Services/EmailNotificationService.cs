@@ -51,9 +51,9 @@ public sealed class EmailNotificationService : INotificationService
             return;
         }
 
-        MimeMessage message = new();
-        message.From.Add(new MailboxAddress("SelectStoreAR", _fromAddress));
-        message.To.Add(new MailboxAddress("Admin", _adminAddress));
+        using MimeMessage message = new();
+        message.From.Add(new MailboxAddress("SelectStoreAR", _fromAddress!));
+        message.To.Add(new MailboxAddress("Admin", _adminAddress!));
         message.Subject = $"SelectStoreAR — {newCount + priceChangedCount} cambios pendientes de aprobacion";
 
         string approveUrl = $"{_adminUrl}/pending/batch/{batchId}";

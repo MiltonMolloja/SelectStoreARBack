@@ -124,6 +124,7 @@ public static class PendingChangesEndpoints
         return Results.Ok(result);
     }
 
-    /// <summary>DTO para el body de reject.</summary>
+    /// <summary>DTO para el body de reject. Instantiated by ASP.NET model binding.</summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1812:Avoid uninstantiated internal classes", Justification = "Instantiated by ASP.NET model binding")]
     private sealed record RejectRequest(string? Note);
 }
