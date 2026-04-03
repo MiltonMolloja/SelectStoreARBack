@@ -13,6 +13,7 @@ public sealed record UploadProductImagesCommand(
 
 public sealed class UploadProductImagesHandler(
     IProductRepository productRepository,
+    IProductImageRepository productImageRepository,
     IImageService imageService,
     IUnitOfWork unitOfWork)
     : IRequestHandler<UploadProductImagesCommand, IReadOnlyList<ProductImageDto>>
@@ -29,21 +30,28 @@ public sealed class UploadProductImagesHandler(
             throw new DomainException($"Product cannot have more than 10 images. Current: {product.Images.Count}, Adding: {request.Files.Count}");
         }
 
-        List<ProductImageDto> results = [];
+        List<ProductImage> newImages = [];
         int currentOrder = product.Images.Count;
 
         foreach ((Stream stream, string fileName) in request.Files)
         {
-            string url = await imageService.SaveImageAsync(stream, fileName, request.ProductId, product.Slug.Value, cancellationToken).ConfigureAwait(false);
-            product.AddImage(url, currentOrder++);
+            string url = await imageService.SaveImageAsync(
+                stream, fileName, request.ProductId, product.Slug.Value, cancellationToken)
+                .ConfigureAwait(false);
+
+            // Crear la imagen directamente sin pasar por product.AddImage()
+            // para evitar que EF marque el producto como Modified
+            ProductImage image = ProductImage.Create(request.ProductId, url, currentOrder++);
+            newImages.Add(image);
         }
 
-        productRepository.Update(product);
+        productImageRepository.AddRange(newImages);
         await unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-        results.AddRange(product.Images
+        List<ProductImageDto> results = [.. product.Images
+            .Concat(newImages)
             .OrderBy(i => i.SortOrder)
-            .Select(i => new ProductImageDto(i.Id, i.Url, i.ThumbnailUrl, i.MediumUrl, i.AltText, i.SortOrder)));
+            .Select(i => new ProductImageDto(i.Id, i.Url, i.ThumbnailUrl, i.MediumUrl, i.AltText, i.SortOrder))];
 
         return results;
     }

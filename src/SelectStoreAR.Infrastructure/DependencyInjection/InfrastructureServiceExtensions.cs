@@ -63,6 +63,7 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<IExchangeRateRepository, ExchangeRateRepository>();
         services.AddScoped<ISiteConfigRepository, SiteConfigRepository>();
         services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<IProductImageRepository, ProductImageRepository>();
         services.AddScoped<IPendingChangeRepository, PendingChangeRepository>();
         services.AddScoped<IPriceHistoryRepository, PriceHistoryRepository>();
 
