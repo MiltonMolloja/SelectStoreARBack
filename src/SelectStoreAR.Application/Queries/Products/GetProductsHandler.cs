@@ -29,6 +29,7 @@ public sealed class GetProductsHandler(
             request.SearchQuery,
             request.MinPriceUsd,
             request.MaxPriceUsd,
+            request.Brand,
             cancellationToken).ConfigureAwait(false);
 
         ExchangeRate? exchangeRate = await exchangeRateRepository.GetActiveAsync(cancellationToken).ConfigureAwait(false);

@@ -17,6 +17,7 @@ public interface IProductRepository
         string? searchQuery = null,
         decimal? minPriceUsd = null,
         decimal? maxPriceUsd = null,
+        string? brand = null,
         CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<Product>> GetFeaturedAsync(int limit = 8, CancellationToken cancellationToken = default);

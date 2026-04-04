@@ -48,10 +48,11 @@ public static class ProductEndpoints
         string? q = null,
         decimal? minPrice = null,
         decimal? maxPrice = null,
+        string? brand = null,
         CancellationToken cancellationToken = default)
     {
         PagedResult<ProductDto> result = await sender.Send(
-            new GetProductsQuery(page, pageSize, categoryId, status, q, minPrice, maxPrice),
+            new GetProductsQuery(page, pageSize, categoryId, status, q, minPrice, maxPrice, brand),
             cancellationToken);
 
         return Results.Ok(result);

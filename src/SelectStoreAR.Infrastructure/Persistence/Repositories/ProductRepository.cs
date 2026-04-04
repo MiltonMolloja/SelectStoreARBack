@@ -34,6 +34,7 @@ public sealed class ProductRepository(AppDbContext dbContext) : IProductReposito
         string? searchQuery = null,
         decimal? minPriceUsd = null,
         decimal? maxPriceUsd = null,
+        string? brand = null,
         CancellationToken cancellationToken = default)
     {
         IQueryable<Product> query = dbContext.Products
@@ -68,6 +69,11 @@ public sealed class ProductRepository(AppDbContext dbContext) : IProductReposito
         if (maxPriceUsd.HasValue)
         {
             query = query.Where(p => p.BasePriceUsd.Amount <= maxPriceUsd.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(brand))
+        {
+            query = query.Where(p => EF.Functions.ILike(p.Brand, $"%{brand}%"));
         }
 
         int totalCount = await query.CountAsync(cancellationToken).ConfigureAwait(false);
