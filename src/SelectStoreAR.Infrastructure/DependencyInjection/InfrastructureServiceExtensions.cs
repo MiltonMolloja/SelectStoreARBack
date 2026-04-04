@@ -40,18 +40,33 @@ public static class InfrastructureServiceExtensions
                 w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
         });
 
-        // Redis
-        string redisConnection = configuration.GetConnectionString("Redis")
-            ?? "localhost:6379";
+        // Redis — desactivado en Development, activo en Production
+        bool useRedis = !string.Equals(
+            configuration["ASPNETCORE_ENVIRONMENT"] ?? configuration["Environment"],
+            "Development",
+            StringComparison.OrdinalIgnoreCase)
+            && !string.IsNullOrEmpty(configuration.GetConnectionString("Redis"));
 
-        services.AddSingleton<IConnectionMultiplexer>(_ =>
-            ConnectionMultiplexer.Connect(redisConnection));
-
-        services.AddStackExchangeRedisCache(options =>
+        if (useRedis)
         {
-            options.Configuration = redisConnection;
-            options.InstanceName = "selectstorear:";
-        });
+            string redisConnection = configuration.GetConnectionString("Redis")!;
+
+            services.AddSingleton<IConnectionMultiplexer>(_ =>
+                ConnectionMultiplexer.Connect(redisConnection));
+
+            services.AddStackExchangeRedisCache(options =>
+            {
+                options.Configuration = redisConnection;
+                options.InstanceName = "selectstorear:";
+            });
+        }
+        else
+        {
+            // En Development: cache en memoria, sin Redis
+            services.AddDistributedMemoryCache();
+            services.AddSingleton<IConnectionMultiplexer>(_ =>
+                ConnectionMultiplexer.Connect("localhost:6379,abortConnect=false"));
+        }
 
         // UnitOfWork
         services.AddScoped<IUnitOfWork, UnitOfWork>();
@@ -72,8 +87,15 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<EmailNotificationService>();
         services.AddScoped<INotificationService, CompositeNotificationService>();
 
-        // Cache
-        services.AddScoped<ICacheService, CacheService>();
+        // Cache — NoOp en Development, Redis en Production
+        if (useRedis)
+        {
+            services.AddScoped<ICacheService, CacheService>();
+        }
+        else
+        {
+            services.AddScoped<ICacheService, NoOpCacheService>();
+        }
 
         // Auth
         services.AddScoped<IJwtService, JwtService>();
